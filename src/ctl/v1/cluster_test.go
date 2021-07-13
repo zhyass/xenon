@@ -10,7 +10,6 @@ package v1
 
 import (
 	"encoding/base64"
-	"strings"
 	"testing"
 
 	"server"
@@ -19,10 +18,9 @@ import (
 
 	"github.com/ant0ine/go-json-rest/rest"
 	"github.com/ant0ine/go-json-rest/rest/test"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestCtlV1RaftStatus(t *testing.T) {
+func TestCtlV1ClusterAddRemove(t *testing.T) {
 	log := xlog.NewStdLog(xlog.Level(xlog.PANIC))
 	port := common.RandomPort(8000, 9000)
 	servers, cleanup := server.MockServers(log, port, 1)
@@ -42,49 +40,69 @@ func TestCtlV1RaftStatus(t *testing.T) {
 	api.Use(authMiddleware)
 
 	router, _ := rest.MakeRouter(
-		rest.Get("/v1/raft/status", RaftStatusHandler(log, xenon)),
-		rest.Post("/v1/raft/trytoleader", RaftTryToLeaderHandler(log, xenon)),
+		rest.Post("/v1/cluster/add", ClusterAddHandler(log, xenon)),
+		rest.Post("/v1/cluster/remove", ClusterRemoveHandler(log, xenon)),
 	)
 	api.SetApp(router)
 	handler := api.MakeHandler()
 
-	// 401.
+	p := &peerParams{
+		Address: "192.168.0.1:8080",
+	}
+
+	// 500.
 	{
-		req := test.MakeSimpleRequest("GET", "http://localhost/v1/raft/status", nil)
+		req := test.MakeSimpleRequest("POST", "http://localhost/v1/cluster/add", nil)
+		encoded := base64.StdEncoding.EncodeToString([]byte("root:"))
+		req.Header.Set("Authorization", "Basic "+encoded)
 		recorded := test.RunRequest(t, handler, req)
-		recorded.CodeIs(401)
+		recorded.CodeIs(500)
+	}
+
+	// 500.
+	{
+
+		req := test.MakeSimpleRequest("POST", "http://localhost/v1/cluster/add", &peerParams{})
+		encoded := base64.StdEncoding.EncodeToString([]byte("root:"))
+		req.Header.Set("Authorization", "Basic "+encoded)
+		recorded := test.RunRequest(t, handler, req)
+		recorded.CodeIs(500)
 	}
 
 	// 200.
 	{
-		req := test.MakeSimpleRequest("GET", "http://localhost/v1/raft/status", nil)
+		req := test.MakeSimpleRequest("POST", "http://localhost/v1/cluster/add", p)
 		encoded := base64.StdEncoding.EncodeToString([]byte("root:"))
 		req.Header.Set("Authorization", "Basic "+encoded)
 		recorded := test.RunRequest(t, handler, req)
 		recorded.CodeIs(200)
-		got := recorded.Recorder.Body.String()
-		log.Debug(got)
-		assert.True(t, strings.Contains(got, `"state":"FOLLOWER"`))
 	}
 
-	// trytoleader.
+	// 500.
 	{
-		req := test.MakeSimpleRequest("POST", "http://localhost/v1/raft/trytoleader", nil)
+		req := test.MakeSimpleRequest("POST", "http://localhost/v1/cluster/remove", nil)
 		encoded := base64.StdEncoding.EncodeToString([]byte("root:"))
 		req.Header.Set("Authorization", "Basic "+encoded)
 		recorded := test.RunRequest(t, handler, req)
-		recorded.CodeIs(200)
+		recorded.CodeIs(500)
+	}
+
+	// 500.
+	{
+
+		req := test.MakeSimpleRequest("POST", "http://localhost/v1/cluster/remove", &peerParams{})
+		encoded := base64.StdEncoding.EncodeToString([]byte("root:"))
+		req.Header.Set("Authorization", "Basic "+encoded)
+		recorded := test.RunRequest(t, handler, req)
+		recorded.CodeIs(500)
 	}
 
 	// 200.
 	{
-		req := test.MakeSimpleRequest("GET", "http://localhost/v1/raft/status", nil)
+		req := test.MakeSimpleRequest("POST", "http://localhost/v1/cluster/remove", p)
 		encoded := base64.StdEncoding.EncodeToString([]byte("root:"))
 		req.Header.Set("Authorization", "Basic "+encoded)
 		recorded := test.RunRequest(t, handler, req)
 		recorded.CodeIs(200)
-		got := recorded.Recorder.Body.String()
-		log.Debug(got)
-		assert.True(t, strings.Contains(got, `"state":"CANDIDATE"`))
 	}
 }

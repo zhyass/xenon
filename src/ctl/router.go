@@ -20,7 +20,15 @@ func (admin *Admin) NewRouter() (rest.App, error) {
 	xenon := admin.xenon
 
 	return rest.MakeRouter(
+		// cluster.
+		rest.Post("/v1/cluster/add", v1.ClusterAddHandler(log, xenon)),
+		rest.Post("/v1/cluster/remove", v1.ClusterRemoveHandler(log, xenon)),
+
 		// raft.
 		rest.Get("/v1/raft/status", v1.RaftStatusHandler(log, xenon)),
+		rest.Post("/v1/raft/trytoleader", v1.RaftTryToLeaderHandler(log, xenon)),
+
+		// xenon.
+		rest.Get("/v1/xenon/ping", v1.XenonPingHandler(log, xenon)),
 	)
 }
